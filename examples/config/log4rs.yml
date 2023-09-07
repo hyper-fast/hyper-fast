@@ -1,0 +1,38 @@
+#refresh_rate: 30 seconds
+appenders:
+  stdout:
+    kind: console
+    encoder:
+      pattern: "{h({d})} {h({l})} {h({f}:{L})} {t} - {m}{n}"
+  service:
+    kind: file
+    path: "logs/service.log"
+    encoder:
+      pattern: "{d} {l} {f}:{L} {t} - {m}{n}"
+  access_log:
+    kind: file
+    path: "logs/access.log"
+    encoder:
+      pattern: "{d} - {m}{n}"
+root:
+  level: debug
+  appenders:
+    - service
+    - stdout
+loggers:
+  access_log:
+    level: info
+    appenders:
+      - access_log
+    additive: false
+  metrics_log:
+    level: debug
+    appenders:
+      - access_log
+    additive: false
+  reqwest:
+    level: off
+  hyper:
+    level: off
+  serde_xml_rs::de:
+    level: off

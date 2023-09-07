@@ -1,0 +1,59 @@
+#refresh_rate: 30 seconds
+appenders:
+  stdout:
+    kind: console
+    encoder:
+      pattern: "{h({d})} {h({l})} {h({f}:{L})} {t} - {m}{n}"
+  service:
+    kind: rolling_file
+    path: "logs/service.log"
+    encoder:
+      pattern: "{d} {l} {f}:{L} {t} - {m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 1gb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 10
+        pattern: "logs/service-{}.log"
+  access_log:
+    kind: rolling_file
+    path: "logs/access.log"
+    encoder:
+      pattern: "{d} - {m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 1gb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 10
+        pattern: "logs/access-{}.log"
+
+root:
+  level: info
+  appenders:
+    - service
+    - stdout
+loggers:
+  access_log:
+    level: info
+    appenders:
+      - access_log
+    additive: false
+  metrics_log:
+    level: debug
+    appenders:
+      - access_log
+    additive: false
+  reqwest:
+    level: off
+  hyper:
+    level: off
+  serde_xml_rs::de:
+    level: off

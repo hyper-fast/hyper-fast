@@ -1,0 +1,2 @@
+http_workers: 6
+json_payload_limit: 262144
