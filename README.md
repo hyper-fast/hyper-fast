@@ -16,7 +16,7 @@ Hyper and rust based very fast HTTP Web framework (much faster than actix and ot
 
 ## Example
 
-Look at `examples/example_server.rs` for a working example.
+Look at `examples/example_server.rs` for a working example. Example can be run with `cargo run --example example_server`
 
 1) Define a service class, implement `Service` trait for api routing.
 
