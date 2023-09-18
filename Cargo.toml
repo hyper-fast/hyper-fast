@@ -2,6 +2,9 @@
 name = "hyper-fast"
 version = "0.1.0"
 edition = "2021"
+description = "Hyper and rust based very fast HTTP Web framework (much faster than actix and other frameworks)."
+repository = "https://github.com/hyper-fast/hyper-fast"
+license = "Apache-2.0"
 
 [[example]]
 name = "example_server"
