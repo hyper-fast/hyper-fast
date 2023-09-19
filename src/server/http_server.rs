@@ -28,7 +28,7 @@ fn index(route: &HttpRoute<'_>) -> HttpResult {
 
 async fn shutdown_signal() {
     // Wait for the CTRL+C signal
-    debug!("Installing server shutdown signal");
+    println!("Installing server shutdown signal");
 
     tokio::signal::ctrl_c()
         .await
@@ -37,7 +37,7 @@ async fn shutdown_signal() {
     SHUTDOWN.store(true, std::sync::atomic::Ordering::Relaxed);
     IN_ROTATION.store(false, std::sync::atomic::Ordering::Relaxed);
 
-    warn!("Received server shutdown signal");
+    println!("Received server shutdown signal");
     std::process::exit(0);
 }
 
@@ -90,7 +90,7 @@ async fn route_handler<App>(
 
     // log & metrics
     #[cfg(any(feature = "access_log", feature = "metrics"))]
-    logger::log(&route, &response);
+    logger::log_api(&route, &response);
 
     response
 }
@@ -104,7 +104,7 @@ pub async fn start_http_server<App, AppDaemon, AppBuilder>(
         AppDaemon: 'static + ServiceDaemon<App>,
         AppBuilder: 'static + ServiceBuilder<App, AppDaemon>,
 {
-    info!("Starting server at addr: {}", addr);
+    println!("Starting server at addr: {}", addr);
 
     let addr = addr
         .parse::<SocketAddr>()
@@ -146,7 +146,7 @@ pub async fn start_http_server<App, AppDaemon, AppBuilder>(
 
     let graceful = server.with_graceful_shutdown(shutdown_signal());
 
-    info!("Started server");
+    println!("Started server");
 
     // Run this server for... forever!
     graceful.await.with_context(|| "Error in starting server")

@@ -6,11 +6,17 @@ use hyper::Body;
 
 use hyper_fast::server::{ApiError, HttpResponse, HttpRoute, Service};
 use hyper_fast::server::{ServiceBuilder, ServiceDaemon, start_http_server};
-use hyper_fast::server::utils::{load_config, setup_logging};
+#[cfg(feature = "settings")]
+use hyper_fast::server::utils::load_config;
+#[cfg(any(feature = "access_log", feature = "metrics"))]
+use hyper_fast::server::utils::setup_logging;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), anyhow::Error> {
+    #[cfg(feature = "settings")]
     load_config("examples/config", "dev")?;
+
+    #[cfg(any(feature = "access_log"))]
     setup_logging("examples/config/log4rs.yml")?;
 
     start_http_server("127.0.0.1:6464", ExampleServiceBuilder {}).await

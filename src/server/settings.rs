@@ -1,7 +1,5 @@
 use anyhow::Context;
 use config::{Config, File, FileFormat};
-#[allow(unused_imports)]
-use log::{debug, error, info, warn};
 use parking_lot::RwLock;
 
 lazy_static! {

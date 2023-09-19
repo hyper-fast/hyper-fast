@@ -15,7 +15,7 @@ mod response_time;
 #[cfg(feature = "metrics")]
 mod metrics_logger;
 
-pub fn log(route: &HttpRoute<'_>, response: &HttpResult) {
+pub fn log_api(route: &HttpRoute<'_>, response: &HttpResult) {
     #[cfg(any(feature = "access_log", feature = "metrics"))]
     if let Ok(response) = response {
         let elapsed_time = route.req_instant.elapsed();

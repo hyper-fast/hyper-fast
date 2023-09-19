@@ -1,5 +1,3 @@
-#[allow(unused_imports)]
-use log::{debug, error, info, warn};
 use thiserror::Error;
 
 use crate::server::{HttpResponse, HttpResult};
