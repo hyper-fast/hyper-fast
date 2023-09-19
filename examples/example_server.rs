@@ -11,8 +11,20 @@ use hyper_fast::server::utils::load_config;
 #[cfg(any(feature = "access_log", feature = "metrics"))]
 use hyper_fast::server::utils::setup_logging;
 
-#[tokio::main(flavor = "multi_thread")]
+#[cfg(feature = "uring")]
+fn main() -> Result<(), anyhow::Error> {
+    tokio_uring::start(main_inner())?;
+
+    Ok(())
+}
+
+#[cfg(not(feature = "uring"))]
+#[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    main_inner().await
+}
+
+async fn main_inner() -> Result<(), anyhow::Error> {
     #[cfg(feature = "settings")]
     load_config("examples/config", "dev")?;
 
