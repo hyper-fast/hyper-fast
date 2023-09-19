@@ -135,7 +135,7 @@ impl ResponseTime {
         self.0.record(elapsed_micros);
     }
 
-    pub fn increment_time_by_duration(&self, duration: std::time::Duration) {
+    pub fn increment_time_by_duration(&self, duration: &std::time::Duration) {
         let elapsed_micros = duration.as_micros() as u64;
         self.0.record(elapsed_micros);
     }

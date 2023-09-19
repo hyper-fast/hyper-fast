@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::Context;
-use http::{HeaderValue, Method, Request};
+use http::{Method, Request};
 use hyper::Body;
 use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
@@ -13,13 +13,16 @@ use log::{debug, error, info, warn};
 
 use crate::server::{HttpResult, IN_ROTATION, Service, ServiceBuilder, ServiceDaemon, SHUTDOWN};
 
-use super::access_logger::ACCESS_LOGGER;
 use super::health_check::{get_in_rotation_status, oor_handler};
 use super::http_response::HttpResponse;
 use super::HttpRoute;
+#[cfg(any(feature = "access_log", feature = "metrics"))]
+use super::logger;
+#[cfg(feature = "metrics")]
+use super::logger::METRICS_LOGGER;
 
 fn index(route: &HttpRoute<'_>) -> HttpResult {
-    let body = Body::from("Hello!");
+    let body = Body::from("Hello, World!");
     HttpResponse::ok(route, body)
 }
 
@@ -63,15 +66,19 @@ async fn route_handler<App>(
         [] if matches!(route.method, &Method::GET) => index(&route),
         ["oor"] => oor_handler(&route),
         ["health"] if matches!(route.method, &Method::GET) => get_in_rotation_status(&route),
-        ["metrics", rest @ ..] => ACCESS_LOGGER.api_handler(req_body, &route, rest).await,
+
+        #[cfg(feature = "metrics")]
+        ["metrics", rest @ ..] => METRICS_LOGGER.api_handler(req_body, &route, rest).await,
+
         ["api", rest @ ..] => app.api_handler(req_body, &route, rest).await,
         _ => HttpResponse::not_found(route.path),
     };
 
-    let response = match response {
+    #[cfg(feature = "response_time")]
+        let response = match response {
         Ok(mut response) => {
             let time_taken = format!("{}", humantime::Duration::from(req_instant.elapsed()));
-            let time_taken_header = HeaderValue::from_str(&time_taken)
+            let time_taken_header = http::HeaderValue::from_str(&time_taken)
                 .with_context(|| format!("Error in building header value time_taken"))?;
             response
                 .headers_mut()
@@ -82,7 +89,8 @@ async fn route_handler<App>(
     };
 
     // log & metrics
-    ACCESS_LOGGER.log_access(&route, &response);
+    #[cfg(any(feature = "access_log", feature = "metrics"))]
+    logger::log(&route, &response);
 
     response
 }

@@ -1,34 +1,35 @@
+use std::time::Duration;
+
 use anyhow::Context;
 use async_trait::async_trait;
 use crossbeam_epoch as epoch;
 use crossbeam_skiplist::SkipList;
-use http::{header, HeaderValue, Response};
+use http::Response;
 use hyper::Body;
-use log::{info, Level, log_enabled};
 use metered::{HitCount, measure};
 use prometheus::{Encoder, Opts, Registry};
 use serde::{Serialize, Serializer};
 use serde::ser::{SerializeMap, SerializeSeq};
 
 use crate::server::{ApiError, HttpResponse, HttpResult, HttpRoute, Service};
-use crate::server::access_logger::metrics::CounterIncrementer;
+use crate::server::logger::metrics::CounterIncrementer;
 
 use super::metrics::ErrorCounter;
 use super::response_time::ResponseTime;
 
 lazy_static! {
-    pub static ref ACCESS_LOGGER: AccessLogger = AccessLogger::new();
+    pub static ref METRICS_LOGGER: MetricsLogger = MetricsLogger::new();
 }
 
-pub struct AccessLogger {
-    registry: ApiMetricsRegistry,
+pub struct MetricsLogger {
+    registry: MetricsRegistry,
 }
 
-struct ApiMetricsRegistry {
-    metrics: SkipList<String, ApiMetrics>,
+struct MetricsRegistry {
+    metrics: SkipList<String, Metrics>,
 }
 
-struct ApiMetrics {
+struct Metrics {
     path: String,
     method: String,
     code: u16,
@@ -37,91 +38,47 @@ struct ApiMetrics {
     response_time: ResponseTime,
 }
 
-impl AccessLogger {
-    pub fn new() -> AccessLogger {
-        AccessLogger {
-            registry: ApiMetricsRegistry {
+impl MetricsLogger {
+    pub fn new() -> MetricsLogger {
+        MetricsLogger {
+            registry: MetricsRegistry {
                 metrics: SkipList::new(epoch::default_collector().clone()),
             },
         }
     }
 
-    pub fn log_access(&self, route: &HttpRoute<'_>, response: &HttpResult) {
-        let elapsed_time = route.req_instant.elapsed();
+    pub fn log(&self, route: &HttpRoute<'_>, response: &Response<Body>, elapsed_time: &Duration) {
+        let path = route.metric_path.unwrap_or_else(|| route.path);
+        let code = response.status().as_u16();
+        let metric_label = format!("{}/{}/{}", path, route.method, code);
 
-        if log_enabled!(target: "access_log", Level::Info) {
-            if let Ok(response) = response {
-                let time_taken_in_millis = (elapsed_time.as_nanos() as f64) / 1_000_000.0;
+        let guard = &epoch::pin();
+        let api_metrics_entry = self.registry.metrics.get_or_insert_with(
+            metric_label,
+            || Metrics {
+                path: path.to_string(),
+                method: route.method.to_string(),
+                code,
+                hits: Default::default(),
+                errors: Default::default(),
+                response_time: Default::default(),
+            },
+            guard,
+        );
 
-                let response_status = response.status().as_u16();
-                let query = route.query.unwrap_or_else(|| "");
+        let api_metrics: &Metrics = api_metrics_entry.value();
 
-                // RemoteAddr
-                // RequestTime
-                // ResponseStatus
-                // TimeInMillis
-                // ResponseContentLength
-                // ResponseContentType
-                // ResponseContentEncoding
-                // URLPath
-                // QueryPath
-                // RequestContentLength
-                // RequestContentType
-                // RequestContentEncoding
-                // RequestAcceptEncoding
-                info!(target: "access_log", "{} {} {} {:.6} {:?} {:?} {:?} {} {:?} {:?} {:?} {:?} {:?}",
-                      route.remote_addr.ip().to_string(),
-                      route.req_time.to_rfc3339(),
-                      response_status,
-                      time_taken_in_millis,
-                      response.headers().get(header::CONTENT_LENGTH), // TODO: have mechanism to properly get response size
-                      response.headers().get(header::CONTENT_TYPE).unwrap_or_else(|| &EMPTY_HEADER_VALUE),
-                      response.headers().get(header::CONTENT_ENCODING).unwrap_or_else(|| &EMPTY_HEADER_VALUE),
-                      route.path,
-                      query,
-                      route.req.headers().get(header::CONTENT_LENGTH).unwrap_or_else(|| &EMPTY_HEADER_VALUE), // TODO: have mechanism to properly get request size
-                      route.req.headers().get(header::CONTENT_TYPE).unwrap_or_else(|| &EMPTY_HEADER_VALUE),
-                      route.req.headers().get(header::CONTENT_ENCODING).unwrap_or_else(|| &EMPTY_HEADER_VALUE),
-                      route.req.headers().get(header::ACCEPT_ENCODING).unwrap_or_else(|| &EMPTY_HEADER_VALUE),
-                );
-            }
+        api_metrics
+            .response_time
+            .increment_time_by_duration(elapsed_time);
+        let hits = &api_metrics.hits;
+        measure!(hits, {});
+
+        if !response.status().is_success() {
+            api_metrics.errors.increment_by(1);
         }
 
-        if log_enabled!(target: "metrics_log", Level::Debug) {
-            if let Ok(response) = response {
-                let path = route.metric_path.unwrap_or_else(|| route.path);
-                let code = response.status().as_u16();
-                let metric_label = format!("{}/{}/{}", path, route.method, code);
-
-                let guard = &epoch::pin();
-                let api_metrics_entry = self.registry.metrics.get_or_insert_with(
-                    metric_label,
-                    || ApiMetrics {
-                        path: path.to_string(),
-                        method: route.method.to_string(),
-                        code,
-                        hits: Default::default(),
-                        errors: Default::default(),
-                        response_time: Default::default(),
-                    },
-                    guard,
-                );
-
-                let api_metrics: &ApiMetrics = api_metrics_entry.value();
-
-                api_metrics
-                    .response_time
-                    .increment_time_by_duration(elapsed_time);
-                let hits = &api_metrics.hits;
-                measure!(hits, {});
-
-                if !response.status().is_success() {
-                    api_metrics.errors.increment_by(1);
-                }
-
-                api_metrics_entry.release(guard);
-            }
-        }
+        api_metrics_entry.release(guard);
     }
 
     // labels: code, method, path ==> hits, errors, response time
@@ -155,7 +112,7 @@ impl AccessLogger {
         // iterate over registry and serialize
         let guard = &epoch::pin();
         for entry in self.registry.metrics.iter(guard) {
-            let api_metrics: &ApiMetrics = entry.value();
+            let api_metrics: &Metrics = entry.value();
 
             let code = format!("{}", api_metrics.code);
             hits_counter
@@ -189,7 +146,7 @@ impl AccessLogger {
     }
 }
 
-impl Serialize for ApiMetrics {
+impl Serialize for Metrics {
     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
         where
             S: Serializer,
@@ -208,7 +165,7 @@ impl Serialize for ApiMetrics {
     }
 }
 
-impl Serialize for ApiMetricsRegistry {
+impl Serialize for MetricsRegistry {
     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
         where
             S: Serializer,
@@ -219,7 +176,7 @@ impl Serialize for ApiMetricsRegistry {
         let guard = &epoch::pin();
 
         for entry in self.metrics.iter(guard) {
-            let api_metrics: &ApiMetrics = entry.value();
+            let api_metrics: &Metrics = entry.value();
 
             seq.serialize_element(api_metrics)?;
         }
@@ -228,12 +185,8 @@ impl Serialize for ApiMetricsRegistry {
     }
 }
 
-lazy_static! {
-    static ref EMPTY_HEADER_VALUE: HeaderValue = HeaderValue::from_static("");
-}
-
 #[async_trait]
-impl Service for AccessLogger {
+impl Service for MetricsLogger {
     async fn api_handler<'a>(&'a self, _: Body, route: &HttpRoute<'a>, path: &[&str]) -> Result<Response<Body>, ApiError> {
         match path {
             // sub routes
