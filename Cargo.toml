@@ -16,6 +16,7 @@ access_log = ["log4rs", "response_time"]
 metrics = ["metered", "crossbeam", "crossbeam-epoch", "crossbeam-skiplist", "parking_lot", "hdrhistogram", "response_time", "prometheus"]
 settings = ["parking_lot", "config"]
 default = ["response_time", "access_log", "metrics", "settings"]
+no-default = []
 
 [dependencies]
 http = "0.2.8"
