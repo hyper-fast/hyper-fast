@@ -1,6 +1,6 @@
 [package]
 name = "hyper-fast"
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 description = "Hyper and rust based very fast HTTP Web framework (much faster than actix and other frameworks)."
 repository = "https://github.com/hyper-fast/hyper-fast"
@@ -11,7 +11,6 @@ name = "example_server"
 path = "examples/example_server.rs"
 
 [features]
-uring = ["tokio-uring"]
 response_time = ["humantime", "humantime-serde"]
 access_log = ["log4rs", "response_time"]
 metrics = ["metered", "crossbeam", "crossbeam-epoch", "crossbeam-skiplist", "parking_lot", "hdrhistogram", "response_time", "prometheus"]
@@ -36,9 +35,6 @@ serde_json = "1.0.91"
 chrono = "0.4.23"
 tokio-util = { version = "0.7.4", features = ["full"] }
 twoway = "0.2.2"
-
-# for uring
-tokio-uring = { version = "0.4.0", optional = true }
 
 # for settings
 config = { version = "0.13.3", optional = true }
