@@ -8,7 +8,7 @@ use hyper::Body;
 use crate::server::{ApiError, HttpRoute};
 
 lazy_static! {
-    pub static ref IN_ROTATION: AtomicBool = AtomicBool::new(true);
+    pub static ref IN_ROTATION: AtomicBool = AtomicBool::new(false);
     pub static ref SHUTDOWN: AtomicBool = AtomicBool::new(false);
 }
 
